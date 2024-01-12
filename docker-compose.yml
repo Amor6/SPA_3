@@ -1,28 +1,59 @@
-version: '3'
 
 services:
   db:
     restart: always
-    image: postgres:14.7-alpine
+    image: postgres
+    container_name: db
     env_file:
-      - .env
-    expose:
-      - '5432'
+      - ./.env
+    ports:
+      - '5432:5432'
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
-  app:
+
+  backend:
     build: .
+    container_name: backend
     depends_on:
       db:
         condition: service_healthy
     command: >
-      bash -c "python manage.py makemigrations
+      bash -c "python manage.py collectstatic --noinput
+      && python manage.py makemigrations
       && python manage.py migrate
+      && python manage.py loaddata data.json
+      && python manage.py loaddata db.json
       && python manage.py runserver 0.0.0.0:8000"
-    expose:
-      - '8000'
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - '6379:6379'
+
+  celery:
+    build: .
+    container_name: celery
+    command: >
+      bash -c "celery -A config worker --beat --loglevel=info"
+    volumes:
+      - .:/app
+    links:
+      - redis
+    depends_on:
+      - redis
+      - backend
+
+volumes:
+  pgdata:

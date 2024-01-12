@@ -114,3 +114,5 @@ docker-compose up --build
 или
 
 docker-compose up -d --build
+
+ENV PIP_ROOT_USER_ACTION=ignore
